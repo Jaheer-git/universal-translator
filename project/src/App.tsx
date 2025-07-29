@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Languages, 
   Copy, 
@@ -509,45 +509,67 @@ function App() {
 
   // Enhanced translation function with better word matching
   const translateText = async (text: string, from: string, to: string): Promise<string> => {
-    setIsLoading(true);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Auto-detect language (mock)
-    let detectedFrom = from;
-    if (from === 'auto') {
-      detectedFrom = 'en'; // Default to English for demo
-      setDetectedLang('en');
-    }
-    
-    const translationKey = `${detectedFrom}-${to}`;
-    const translations = mockTranslations[translationKey];
-    
-    if (translations) {
-      const lowerText = text.toLowerCase().trim();
-      let result = text;
+    try {
+      setIsLoading(true);
       
-      // First try exact match
-      if (translations[lowerText]) {
-        result = translations[lowerText];
-      } else {
-        // Replace known words/phrases
-        Object.entries(translations).forEach(([key, value]) => {
-          const regex = new RegExp(`\\b${key}\\b`, 'gi');
-          result = result.replace(regex, value);
-        });
+      // Validate inputs
+      if (!text || !text.trim()) {
+        setIsLoading(false);
+        return '';
+      }
+      
+      if (from === to) {
+        setIsLoading(false);
+        return text; // Same language, return original text
+      }
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Auto-detect language (mock)
+      let detectedFrom = from;
+      if (from === 'auto') {
+        detectedFrom = 'en'; // Default to English for demo
+        setDetectedLang('en');
+      }
+      
+      const translationKey = `${detectedFrom}-${to}`;
+      const translations = mockTranslations[translationKey];
+      
+      if (translations) {
+        const lowerText = text.toLowerCase().trim();
+        let result = text;
+        
+        // First try exact match
+        if (translations[lowerText]) {
+          result = translations[lowerText];
+        } else {
+          // Replace known words/phrases
+          Object.entries(translations).forEach(([key, value]) => {
+            try {
+              const regex = new RegExp(`\\b${key}\\b`, 'gi');
+              result = result.replace(regex, value);
+            } catch (regexError) {
+              console.warn('Regex error for key:', key, regexError);
+            }
+          });
+        }
+        
+        setIsLoading(false);
+        return result;
       }
       
       setIsLoading(false);
-      return result;
+      const targetLanguage = languages.find(l => l.code === to)?.name || to;
+      return `[Translation to ${targetLanguage}] ${text}`;
+    } catch (error) {
+      setIsLoading(false);
+      console.error('Translation error:', error);
+      return `Error translating text: ${text}`;
     }
-    
-    setIsLoading(false);
-    return `[Translation to ${languages.find(l => l.code === to)?.name}] ${text}`;
   };
 
-  const handleTranslate = async () => {
+  const handleTranslate = useCallback(async () => {
     if (!sourceText.trim()) return;
     
     const result = await translateText(sourceText, sourceLang, targetLang);
@@ -564,21 +586,38 @@ function App() {
     };
     
     setHistory(prev => [newEntry, ...prev.slice(0, 9)]);
-  };
+  }, [sourceText, sourceLang, targetLang, detectedLang]);
 
   const handleCopy = async () => {
     if (translatedText) {
-      await navigator.clipboard.writeText(translatedText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(translatedText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err: unknown) {
+        // Fallback for browsers that don't support clipboard API
+        console.warn('Clipboard API failed, using fallback:', err);
+        const textArea = document.createElement('textarea');
+        textArea.value = translatedText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   };
 
   const handleSpeak = () => {
     if (translatedText && 'speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(translatedText);
-      utterance.lang = targetLang;
-      speechSynthesis.speak(utterance);
+      try {
+        const utterance = new SpeechSynthesisUtterance(translatedText);
+        utterance.lang = targetLang;
+        speechSynthesis.speak(utterance);
+      } catch (err: unknown) {
+        console.warn('Speech synthesis failed:', err);
+      }
     }
   };
 
@@ -616,7 +655,7 @@ function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [sourceText, sourceLang, targetLang]);
+  }, [sourceText, sourceLang, targetLang, handleTranslate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
