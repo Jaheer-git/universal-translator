@@ -508,7 +508,7 @@ function App() {
   const outputRef = useRef<HTMLDivElement>(null);
 
   // Enhanced translation function with better word matching
-  const translateText = async (text: string, from: string, to: string): Promise<string> => {
+  const translateText = React.useCallback(async (text: string, from: string, to: string): Promise<string> => {
     setIsLoading(true);
     
     // Simulate API delay
@@ -545,9 +545,9 @@ function App() {
     
     setIsLoading(false);
     return `[Translation to ${languages.find(l => l.code === to)?.name}] ${text}`;
-  };
+  }, []);
 
-  const handleTranslate = async () => {
+  const handleTranslate = React.useCallback(async () => {
     if (!sourceText.trim()) return;
     
     const result = await translateText(sourceText, sourceLang, targetLang);
@@ -564,7 +564,7 @@ function App() {
     };
     
     setHistory(prev => [newEntry, ...prev.slice(0, 9)]);
-  };
+  }, [sourceText, sourceLang, targetLang, detectedLang, translateText]);
 
   const handleCopy = async () => {
     if (translatedText) {
@@ -616,7 +616,7 @@ function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [sourceText, sourceLang, targetLang]);
+  }, [sourceText, sourceLang, targetLang, handleTranslate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
