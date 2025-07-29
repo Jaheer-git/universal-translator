@@ -8,10 +8,14 @@ import {
   Globe,
   Mic,
   Check,
-  Loader2
+  Loader2,
+  Upload,
+  Wifi,
+  WifiOff,
+  Star
 } from 'lucide-react';
 
-// Enhanced mock translation data with Indian and regional languages
+// Enhanced mock translation data with Indian and regional languages (for offline mode)
 const mockTranslations: { [key: string]: { [key: string]: string } } = {
   'en-es': {
     'hello': 'hola',
@@ -492,6 +496,14 @@ interface TranslationHistory {
   fromLang: string;
   toLang: string;
   timestamp: Date;
+  confidence?: number;
+  isOnline: boolean;
+}
+
+interface TranslationResult {
+  text: string;
+  confidence: number;
+  detectedLanguage?: string;
 }
 
 function App() {
@@ -504,23 +516,80 @@ function App() {
   const [history, setHistory] = useState<TranslationHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [confidence, setConfidence] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Enhanced translation function with better word matching
-  const translateText = async (text: string, from: string, to: string): Promise<string> => {
-    setIsLoading(true);
+  // Monitor online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     
-    // Auto-detect language (mock)
-    let detectedFrom = from;
-    if (from === 'auto') {
-      detectedFrom = 'en'; // Default to English for demo
-      setDetectedLang('en');
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Language detection using TextCat algorithm (simple version)
+  const detectLanguage = (text: string): string => {
+    const sampleText = text.toLowerCase().slice(0, 100);
+    
+    // Simple pattern-based detection for common languages
+    if (/[अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]/.test(sampleText)) return 'hi';
+    if (/[అఆఇఈఉఊఋౠఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశషసహ]/.test(sampleText)) return 'te';
+    if (/[அஆஇஈஉஊஎஏஐஒஓஔகஙசஞடணதநபமயரலவழளறன]/.test(sampleText)) return 'ta';
+    if (/[অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহ]/.test(sampleText)) return 'bn';
+    if (/[અઆઇઈઉઊઋએઐઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહ]/.test(sampleText)) return 'gu';
+    if (/[अआईऊएओकखगघचछजझटठडढणतथदधनपफबभमयरलवशषसह्]/.test(sampleText)) return 'mr';
+    if (/[ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷಸಹ]/.test(sampleText)) return 'kn';
+    if (/[അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹ]/.test(sampleText)) return 'ml';
+    if (/[اآبپتٹثجچحخدڈذرڑزژسشصضطظعغفقکگلمنوہیے]/.test(sampleText)) return 'ur';
+    if (/[ਅਆਇਈਉਊਏਐਓਔਕਖਗਘਙਚਛਜਝਞਟਠਡਢਣਤਥਦਧਨਪਫਬਭਮਯਰਲਵਸ਼ਸਹ]/.test(sampleText)) return 'pa';
+    if (/[أابتثجحخدذرزسشصضطظعغفقكلمنهوي]/.test(sampleText)) return 'ar';
+    if (/[你我他她它们的是在有一个这那么什么怎样为了但是如果因为所以虽然]/.test(sampleText)) return 'zh';
+    if (/[のはでをにがとしてからまたはれるあるいてこと日本語]/.test(sampleText)) return 'ja';
+    if (/[이그는을를과와에서도만의가한국어입니다]/.test(sampleText)) return 'ko';
+    if (/[абвгдежзийклмнопрстуфхцчшщъыьэюя]/.test(sampleText)) return 'ru';
+    if (/\b(el|la|los|las|un|una|que|de|se|y|es|en|no|te|lo|por|con|para|su|como|pero|muy|todo|hacer|tiempo|cada|donde|desde|hasta|porque|mientras)\b/.test(sampleText)) return 'es';
+    if (/\b(le|de|et|à|un|il|être|et|en|avoir|que|pour|dans|ce|son|une|sur|avec|ne|se|pas|tout|mais|pouvoir|dire|leur|elle|où|ou)\b/.test(sampleText)) return 'fr';
+    if (/\b(der|die|das|und|in|den|von|zu|das|mit|sich|auf|für|ist|im|dem|nicht|ein|eine|als|auch|es|an|werden|aus|er|hat|dass)\b/.test(sampleText)) return 'de';
+    
+    return 'en'; // Default to English
+  };
+
+  // Real translation API using MyMemory
+  const translateWithAPI = async (text: string, from: string, to: string): Promise<TranslationResult> => {
+    try {
+      const sourceLang = from === 'auto' ? detectLanguage(text) : from;
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${to}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.responseStatus === 200) {
+        return {
+          text: data.responseData.translatedText,
+          confidence: data.responseData.match || 0.8,
+          detectedLanguage: sourceLang
+        };
+      } else {
+        throw new Error('API request failed');
+      }
+    } catch (error) {
+      console.error('Translation API error:', error);
+      throw error;
     }
-    
+  };
+
+  // Fallback mock translation for offline mode
+  const translateWithMock = (text: string, from: string, to: string): TranslationResult => {
+    const detectedFrom = from === 'auto' ? detectLanguage(text) : from;
     const translationKey = `${detectedFrom}-${to}`;
     const translations = mockTranslations[translationKey];
     
@@ -539,31 +608,97 @@ function App() {
         });
       }
       
+      return {
+        text: result,
+        confidence: result !== text ? 0.7 : 0.3,
+        detectedLanguage: detectedFrom
+      };
+    }
+    
+    return {
+      text: `[Translation to ${languages.find(l => l.code === to)?.name}] ${text}`,
+      confidence: 0.1,
+      detectedLanguage: detectedFrom
+    };
+  };
+
+  // Enhanced translation function with online/offline capability
+  const translateText = async (text: string, from: string, to: string): Promise<TranslationResult> => {
+    setIsLoading(true);
+    
+    try {
+      if (isOnline) {
+        // Try API first
+        const result = await translateWithAPI(text, from, to);
+        setIsLoading(false);
+        return result;
+      } else {
+        // Use mock translation for offline
+        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate processing time
+        const result = translateWithMock(text, from, to);
+        setIsLoading(false);
+        return result;
+      }
+    } catch (error) {
+      // Fallback to mock if API fails
+      console.warn('Falling back to offline translation');
+      const result = translateWithMock(text, from, to);
       setIsLoading(false);
       return result;
     }
-    
-    setIsLoading(false);
-    return `[Translation to ${languages.find(l => l.code === to)?.name}] ${text}`;
   };
 
   const handleTranslate = async () => {
     if (!sourceText.trim()) return;
     
     const result = await translateText(sourceText, sourceLang, targetLang);
-    setTranslatedText(result);
+    setTranslatedText(result.text);
+    setConfidence(result.confidence);
+    
+    if (result.detectedLanguage && sourceLang === 'auto') {
+      setDetectedLang(result.detectedLanguage);
+    }
     
     // Add to history
     const newEntry: TranslationHistory = {
       id: Date.now().toString(),
       sourceText,
-      translatedText: result,
-      fromLang: sourceLang === 'auto' ? (detectedLang || 'en') : sourceLang,
+      translatedText: result.text,
+      fromLang: sourceLang === 'auto' ? (result.detectedLanguage || 'en') : sourceLang,
       toLang: targetLang,
-      timestamp: new Date()
+      timestamp: new Date(),
+      confidence: result.confidence,
+      isOnline
     };
     
     setHistory(prev => [newEntry, ...prev.slice(0, 9)]);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    if (file.type !== 'text/plain') {
+      alert('Please upload a .txt file');
+      return;
+    }
+    
+    if (file.size > 10000) { // 10KB limit
+      alert('File size should be less than 10KB');
+      return;
+    }
+    
+    try {
+      const content = await file.text();
+      setSourceText(content);
+    } catch (error) {
+      alert('Error reading file');
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleCopy = async () => {
@@ -586,6 +721,7 @@ function App() {
     setSourceText('');
     setTranslatedText('');
     setDetectedLang(null);
+    setConfidence(null);
   };
 
   const handleSwapLanguages = () => {
@@ -605,6 +741,24 @@ function App() {
     return languages.find(l => l.code === code)?.flag || '🌐';
   };
 
+  const getConfidenceColor = (conf: number) => {
+    if (conf >= 0.8) return 'text-green-600';
+    if (conf >= 0.6) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const renderConfidenceStars = (conf: number) => {
+    const stars = Math.round(conf * 5);
+    return Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        className={`w-3 h-3 ${
+          i < stars ? 'text-yellow-400 fill-current' : 'text-gray-300'
+        }`}
+      />
+    ));
+  };
+
   // Auto-translate on text change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -612,6 +766,7 @@ function App() {
         handleTranslate();
       } else {
         setTranslatedText('');
+        setConfidence(null);
       }
     }, 500);
 
@@ -633,12 +788,24 @@ function App() {
                 <p className="text-sm text-gray-600">Breaking language barriers worldwide</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="px-4 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-            >
-              History
-            </button>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                {isOnline ? (
+                  <Wifi className="w-5 h-5 text-green-600" />
+                ) : (
+                  <WifiOff className="w-5 h-5 text-red-600" />
+                )}
+                <span className="text-sm text-gray-600">
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="px-4 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+              >
+                History
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -705,13 +872,29 @@ function App() {
                 </div>
               </div>
               
-              <button
-                onClick={handleClear}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Clear</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm">Upload</span>
+                </button>
+                <button
+                  onClick={handleClear}
+                  className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Clear</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -749,7 +932,7 @@ function App() {
                   {sourceText.length}/5000 characters
                 </span>
                 <div className="text-xs text-gray-400">
-                  Try common words for better translations
+                  {isOnline ? 'Real-time translation with AI' : 'Offline mode active'}
                 </div>
               </div>
             </div>
@@ -757,9 +940,19 @@ function App() {
             {/* Output Section */}
             <div className="p-6 bg-gray-50/50">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {getLanguageFlag(targetLang)} {getLanguageName(targetLang)}
-                </h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {getLanguageFlag(targetLang)} {getLanguageName(targetLang)}
+                  </h3>
+                  {confidence !== null && (
+                    <div className="flex items-center space-x-1">
+                      {renderConfidenceStars(confidence)}
+                      <span className={`text-xs font-medium ${getConfidenceColor(confidence)}`}>
+                        {Math.round(confidence * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleCopy}
@@ -803,7 +996,6 @@ function App() {
           </div>
         </div>
 
-
         {/* History Panel */}
         {showHistory && (
           <div className="mt-8 bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden">
@@ -818,9 +1010,19 @@ function App() {
                   {history.map((item) => (
                     <div key={item.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-600">
-                          {getLanguageFlag(item.fromLang)} {getLanguageName(item.fromLang)} → {getLanguageFlag(item.toLang)} {getLanguageName(item.toLang)}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-600">
+                            {getLanguageFlag(item.fromLang)} {getLanguageName(item.fromLang)} → {getLanguageFlag(item.toLang)} {getLanguageName(item.toLang)}
+                          </span>
+                          {item.confidence && (
+                            <div className="flex items-center space-x-1">
+                              {renderConfidenceStars(item.confidence)}
+                            </div>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded ${item.isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {item.isOnline ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
                         <span className="text-xs text-gray-500">
                           {item.timestamp.toLocaleTimeString()}
                         </span>
@@ -862,9 +1064,13 @@ function App() {
             <p className="text-sm text-gray-500 mb-4">
               Supporting 50+ languages including Hindi, Telugu, Tamil, Bengali, Gujarati, Kannada, Malayalam, Marathi, Punjabi, and Urdu
             </p>
-            <p className="text-sm text-gray-500">
-              © 2025 Universal Translator. Built with React and TypeScript.
-            </p>
+            <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+              <span>© 2025 Universal Translator</span>
+              <span>•</span>
+              <span>Built with React and TypeScript</span>
+              <span>•</span>
+              <span>{isOnline ? 'Real-time AI translation' : 'Offline capable'}</span>
+            </div>
           </div>
         </div>
       </footer>

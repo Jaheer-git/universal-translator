@@ -1,0 +1,19 @@
+Welcome to the Universal Language Translator!
+
+This is a sample text file to demonstrate the file upload translation feature. 
+
+The application supports over 50 languages including:
+- Indian regional languages like Hindi, Telugu, Tamil, Bengali
+- Major world languages like Spanish, French, German, Japanese
+- And many more!
+
+Try uploading this file and translating it to different languages to see how the system works.
+
+Thank you for using our translator!
+
+Peace and love to all.
+Family is everything.
+Dreams make the future bright.
+Water and food are essential for life.
+Education opens doors to opportunities.
+Friendship connects hearts across cultures.
